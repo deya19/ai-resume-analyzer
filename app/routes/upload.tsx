@@ -9,7 +9,11 @@ import { generateUUID } from "~/lib/utils";
 
 export const meta = () => [
   { title: "Resumind | Upload" },
-  { name: "description", content: "Log into your account" },
+  {
+    name: "description",
+    content:
+      "Easily upload your resume to get personalized AI-powered feedback, ATS insights, and improvement suggestions in seconds.",
+  },
 ];
 
 export default function Upload() {
@@ -34,13 +38,13 @@ export default function Upload() {
 
     setStatusText("Uploading the file...");
     const uploadedFile = await fs.upload([file]);
-    console.log(uploadedFile)
+    console.log(uploadedFile);
     if (!uploadedFile) return setStatusText("Error: Failed to upload file");
 
     setStatusText("Converting to image...");
-    
+
     const imageFile = await convertPdfToImage(file);
-    console.log(imageFile)
+    console.log(imageFile);
     if (!imageFile.file)
       return setStatusText("Error: Failed to convert PDF to image");
 
@@ -72,16 +76,16 @@ export default function Upload() {
     );
     if (!feedback) return setStatusText("Error: Failed to analyze resume");
 
-    const feedbackText = typeof feedback.message.content === 'string'
+    const feedbackText =
+      typeof feedback.message.content === "string"
         ? feedback.message.content
         : feedback.message.content[0].text;
 
     data.feedback = JSON.parse(feedbackText);
     await kv.set(`resume:${uuid}`, JSON.stringify(data));
-    setStatusText('Analysis complete, redirecting...');
+    setStatusText("Analysis complete, redirecting...");
     console.log(data);
-    // navigate(`/resume/${uuid}`);
-
+    navigate(`/resume/${uuid}`);
   };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
