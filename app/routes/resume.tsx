@@ -14,12 +14,13 @@ export const meta = ({ params }: { params: { id: string } }) => {
 };
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Timed out")), ms)
-    ),
-  ]);
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Timed out")), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 export default function Resume() {
@@ -38,9 +39,13 @@ export default function Resume() {
 
   useEffect(() => {
       let cancelled = false;
+      const objectUrls: string[] = [];
 
       const loadResume = async () => {
           setLoadError('');
+          setFeedback(null);
+          setResumeUrl('');
+          setImageUrl('');
           try {
             const resume = await withTimeout(kv.get(`resume:${id}`), 15000);
             if (cancelled) return;
@@ -61,6 +66,7 @@ export default function Resume() {
 
             const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
             const resumeUrl = URL.createObjectURL(pdfBlob);
+            objectUrls.push(resumeUrl);
             setResumeUrl(resumeUrl);
 
             const imageBlob = await withTimeout(fs.read(data.imagePath), 20000);
@@ -70,6 +76,7 @@ export default function Resume() {
               return;
             }
             const imageUrl = URL.createObjectURL(imageBlob);
+            objectUrls.push(imageUrl);
             setImageUrl(imageUrl);
 
             if(!data.feedback) {
@@ -87,7 +94,10 @@ export default function Resume() {
 
       loadResume();
 
-      return () => { cancelled = true; };
+      return () => {
+          cancelled = true;
+          objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      };
   }, [id, retryCount]);
 
   return (

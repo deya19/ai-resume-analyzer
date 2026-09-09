@@ -21,10 +21,30 @@ export function formatSize(bytes: number): string {
 export const generateUUID = () => crypto.randomUUID();
 
 export function extractJson(text: string) {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) {
-    throw new Error("No JSON object found in AI response");
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}" && depth > 0 && --depth === 0) {
+      return JSON.parse(text.slice(start, i + 1));
+    }
   }
-  return JSON.parse(text.slice(start, end + 1));
+
+  throw new Error("No JSON object found in AI response");
 }

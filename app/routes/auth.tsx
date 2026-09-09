@@ -11,7 +11,11 @@ export default function Auth() {
   const { isLoading, auth } = usePuterStore();
   const location = useLocation();
   const nextParam = new URLSearchParams(location.search).get("next") ?? "";
-  const next = nextParam.startsWith("/") ? nextParam : "/";
+  const isSafeNext =
+    nextParam.startsWith("/") &&
+    !nextParam.startsWith("//") &&
+    !nextParam.includes("\\");
+  const next = isSafeNext ? nextParam : "/";
   const navigate = useNavigate();
 
 

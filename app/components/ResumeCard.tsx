@@ -17,17 +17,22 @@ export default function ResumeCard({
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
+    let objectUrl: string | null = null;
     const loadResume = async () => {
       try {
         const blob = await fs.read(imagePath);
         if (!blob) return;
-        setResumeUrl(URL.createObjectURL(blob));
+        objectUrl = URL.createObjectURL(blob);
+        setResumeUrl(objectUrl);
       } catch (err) {
         console.error("Failed to load resume image", err);
       }
     };
 
     loadResume();
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [imagePath]);
 
   useEffect(() => {
@@ -49,15 +54,21 @@ export default function ResumeCard({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await kv.delete(`resume:${id}`);
+      const deleted = await kv.delete(`resume:${id}`);
+      if (deleted !== true) {
+        console.error("Failed to delete resume");
+        return;
+      }
       await Promise.all([
         fs.delete(resumePath),
         fs.delete(imagePath),
-      ]).catch(() => {});
+      ]).catch((err) => console.error("Failed to clean up resume files", err));
+      onDelete?.(id);
     } catch (err) {
       console.error("Failed to delete resume", err);
+    } finally {
+      setDeleting(false);
     }
-    onDelete?.(id);
   };
 
   return (
@@ -110,7 +121,11 @@ export default function ResumeCard({
         createPortal(
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={() => setShowConfirm(false)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowConfirm(false);
+            }}
           >
             <div
               className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm animate-in fade-in zoom-in-95 duration-200"
