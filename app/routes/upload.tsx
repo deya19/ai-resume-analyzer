@@ -5,7 +5,7 @@ import FileUploader from "~/components/FileUploader";
 import Navbar from "~/components/Navbar";
 import { convertPdfToImage } from "~/lib/pdf2img";
 import { usePuterStore } from "~/lib/puter";
-import { generateUUID } from "~/lib/utils";
+import { generateUUID, extractJson } from "~/lib/utils";
 
 export const meta = () => [
   { title: "Resumind | Upload" },
@@ -81,7 +81,7 @@ export default function Upload() {
         ? feedback.message.content
         : feedback.message.content[0].text;
 
-    data.feedback = JSON.parse(feedbackText);
+    data.feedback = extractJson(feedbackText);
     await kv.set(`resume:${uuid}`, JSON.stringify(data));
     setStatusText("Analysis complete, redirecting...");
     console.log(data);

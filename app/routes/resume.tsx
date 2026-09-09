@@ -13,12 +13,23 @@ export const meta = ({ params }: { params: { id: string } }) => {
   ];
 };
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timed out")), ms)
+    ),
+  ]);
+}
+
 export default function Resume() {
   const { auth, isLoading, fs, kv } = usePuterStore();
   const { id } = useParams();
   const [imageUrl, setImageUrl] = useState('');
   const [resumeUrl, setResumeUrl] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,31 +37,58 @@ export default function Resume() {
   }, [isLoading])
 
   useEffect(() => {
+      let cancelled = false;
+
       const loadResume = async () => {
-          const resume = await kv.get(`resume:${id}`);
+          setLoadError('');
+          try {
+            const resume = await withTimeout(kv.get(`resume:${id}`), 15000);
+            if (cancelled) return;
 
-          if(!resume) return;
+            if(!resume) {
+              setLoadError("Review not found — it may have been deleted.");
+              return;
+            }
 
-          const data = JSON.parse(resume);
+            const data = JSON.parse(resume);
 
-          const resumeBlob = await fs.read(data.resumePath);
-          if(!resumeBlob) return;
+            const resumeBlob = await withTimeout(fs.read(data.resumePath), 20000);
+            if (cancelled) return;
+            if(!resumeBlob) {
+              setLoadError("Could not load the resume file.");
+              return;
+            }
 
-          const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
-          const resumeUrl = URL.createObjectURL(pdfBlob);
-          setResumeUrl(resumeUrl);
+            const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
+            const resumeUrl = URL.createObjectURL(pdfBlob);
+            setResumeUrl(resumeUrl);
 
-          const imageBlob = await fs.read(data.imagePath);
-          if(!imageBlob) return;
-          const imageUrl = URL.createObjectURL(imageBlob);
-          setImageUrl(imageUrl);
+            const imageBlob = await withTimeout(fs.read(data.imagePath), 20000);
+            if (cancelled) return;
+            if(!imageBlob) {
+              setLoadError("Could not load the resume image.");
+              return;
+            }
+            const imageUrl = URL.createObjectURL(imageBlob);
+            setImageUrl(imageUrl);
 
-          setFeedback(data.feedback);
-          console.log({resumeUrl, imageUrl, feedback: data.feedback });
+            if(!data.feedback) {
+              setLoadError("This review has no analysis saved — it was created before a bug was fixed. Please upload the resume again to generate a new review.");
+              return;
+            }
+
+            setFeedback(data.feedback);
+          } catch (err) {
+            if (cancelled) return;
+            console.error(err);
+            setLoadError("Failed to load this resume — Puter may be rate-limiting requests. Wait a moment and try again.");
+          }
       }
 
       loadResume();
-  }, [id]);
+
+      return () => { cancelled = true; };
+  }, [id, retryCount]);
 
   return (
     <main className="!pt-0">
@@ -86,6 +124,16 @@ export default function Resume() {
                 suggestions={feedback.ATS.tips || []}
               />
               <Details feedback={feedback} />
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-start gap-4">
+              <p className="text-red-600 font-medium">{loadError}</p>
+              <button
+                onClick={() => setRetryCount((c) => c + 1)}
+                className="primary-button w-fit cursor-pointer"
+              >
+                Try Again
+              </button>
             </div>
           ) : (
             <img src="/images/resume-scan-2.gif" alt="resume scan 2" className="w-full" />

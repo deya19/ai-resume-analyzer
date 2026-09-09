@@ -19,3 +19,12 @@ export function formatSize(bytes: number): string {
 }
 
 export const generateUUID = () => crypto.randomUUID();
+
+export function extractJson(text: string) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    throw new Error("No JSON object found in AI response");
+  }
+  return JSON.parse(text.slice(start, end + 1));
+}
